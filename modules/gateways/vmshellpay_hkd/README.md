@@ -19,6 +19,6 @@ For complete installation, configuration, callback, refund, dispute, exchange-ra
 ## Production Notes
 
 - Keep `AppSecret` private.
-- Keep callback signature verification mode as `strict`.
 - Use HTTPS for all WHMCS and callback URLs.
 - Keep manual exchange rates configured as fallback even when automatic exchange rates are enabled.
+- Test the invoice-page QR flow, cart-completion redirect flow, payment callback, return query, refund, and dispute notification before enabling the gateway for all users.

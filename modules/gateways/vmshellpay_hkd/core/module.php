@@ -12,7 +12,7 @@ function vmshellpay_hkd_internalDefaults()
         'terminal' => 'auto',
         'paymentScene' => 'auto',
         'orderPrefix' => 'WHMCS',
-        'notifyMode' => 'strict',
+        'notifyMode' => 'compat',
         'exchangeRateTimeout' => '10',
         'exchangeRateMarkupPercent' => '0',
         'disputeDeptId' => '1',
@@ -35,7 +35,7 @@ function vmshellpay_hkd_MetaData()
     return [
         'DisplayName' => 'VmShellPAY-HKD',
         'APIVersion' => '1.1',
-        'DisableLocalCreditCardInput' => true,
+        'DisableLocalCredtCardInput' => true,
         'TokenisedStorage' => false,
     ];
 }
@@ -88,16 +88,9 @@ function vmshellpay_hkd_config()
         ],
         'appSecret' => [
             'FriendlyName' => 'VmShell PAY AppSecret:',
-            'Type' => 'password',
+            'Type' => 'text',
             'Size' => '60',
             'Description' => ' 下游商户 AppSecret',
-        ],
-        'apiBaseUrl' => [
-            'FriendlyName' => 'VmShell PAY API 地址',
-            'Type' => 'text',
-            'Size' => '80',
-            'Default' => 'https://vmshell.win',
-            'Description' => ' 默认使用官方 API 地址；末尾不需要 /',
         ],
         'contactEmail' => [
             'FriendlyName' => '联系邮箱',
@@ -112,34 +105,6 @@ function vmshellpay_hkd_config()
             'Size' => '100',
             'Default' => 'https://vmshell.win/disputes/{dispute_id}',
             'Description' => ' 默认值通常即可使用',
-        ],
-        'notifyUrl' => [
-            'FriendlyName' => '支付通知 notify_url',
-            'Type' => 'text',
-            'Size' => '100',
-            'Default' => '',
-            'Description' => ' 留空时自动使用 /modules/gateways/callback/vmshellpay_payment_notify_url.php',
-        ],
-        'returnUrl' => [
-            'FriendlyName' => '同步跳转 return_url',
-            'Type' => 'text',
-            'Size' => '100',
-            'Default' => '',
-            'Description' => ' 留空时自动使用插件内置返回页',
-        ],
-        'refundNotifyUrl' => [
-            'FriendlyName' => '退款通知 refund_notify_url',
-            'Type' => 'text',
-            'Size' => '100',
-            'Default' => '',
-            'Description' => ' 留空时可在 VmShellPAY 平台按文档填写默认退款通知地址',
-        ],
-        'disputeNotifyUrl' => [
-            'FriendlyName' => '争议通知 dispute_notify_url',
-            'Type' => 'text',
-            'Size' => '100',
-            'Default' => '',
-            'Description' => ' 留空时可在 VmShellPAY 平台按文档填写默认争议通知地址',
         ],
         'enableAlipayCN' => [
             'FriendlyName' => '支付宝.中国',
@@ -188,27 +153,6 @@ function vmshellpay_hkd_config()
             'Default' => 'https://api.frankfurter.dev/v2/rate/{from}/{to}',
             'Description' => ' 默认使用 Frankfurter；支持 {from} {to} {amount} 占位符',
         ],
-        'exchangeRateApiKey' => [
-            'FriendlyName' => '汇率接口 API Key',
-            'Type' => 'password',
-            'Size' => '60',
-            'Default' => '',
-            'Description' => ' 默认 Frankfurter 无需填写；使用自定义接口时可填写',
-        ],
-        'exchangeRateTimeout' => [
-            'FriendlyName' => '汇率接口超时秒数',
-            'Type' => 'text',
-            'Size' => '10',
-            'Default' => '10',
-            'Description' => ' 自动汇率接口请求超时时间',
-        ],
-        'exchangeRateMarkupPercent' => [
-            'FriendlyName' => '汇率上浮比例',
-            'Type' => 'text',
-            'Size' => '10',
-            'Default' => '0',
-            'Description' => ' 例如 1.5 表示在实时汇率基础上上浮 1.5%',
-        ],
         'manualExchangeRates' => [
             'FriendlyName' => '手工汇率表',
             'Type' => 'textarea',
@@ -231,61 +175,6 @@ function vmshellpay_hkd_config()
             'Default' => '0.65',
             'Description' => ' 仅做后台展示备注，例如 0.30',
         ],
-        'signType' => [
-            'FriendlyName' => '签名方式',
-            'Type' => 'dropdown',
-            'Options' => 'HMAC-SHA256,MD5',
-            'Default' => 'HMAC-SHA256',
-            'Description' => ' 推荐 HMAC-SHA256',
-        ],
-        'terminal' => [
-            'FriendlyName' => '终端类型',
-            'Type' => 'dropdown',
-            'Options' => 'auto,web,wap',
-            'Default' => 'auto',
-            'Description' => ' 默认 auto',
-        ],
-        'paymentScene' => [
-            'FriendlyName' => '支付场景',
-            'Type' => 'dropdown',
-            'Options' => 'auto,pc,mobile',
-            'Default' => 'auto',
-            'Description' => ' 默认 auto',
-        ],
-        'orderPrefix' => [
-            'FriendlyName' => '订单号前缀',
-            'Type' => 'text',
-            'Size' => '20',
-            'Default' => 'WHMCS',
-            'Description' => ' 仅允许字母、数字、下划线和横线',
-        ],
-        'notifyMode' => [
-            'FriendlyName' => '回调验签策略',
-            'Type' => 'dropdown',
-            'Options' => 'strict,compat',
-            'Default' => 'strict',
-            'Description' => ' 生产环境必须使用 strict；compat 仅用于旧接口联调排查',
-        ],
-        'disputeDeptId' => [
-            'FriendlyName' => '争议工单部门 ID',
-            'Type' => 'text',
-            'Size' => '10',
-            'Default' => '1',
-            'Description' => ' 收到争议通知时创建或更新工单的部门 ID',
-        ],
-        'disputeAdminUsername' => [
-            'FriendlyName' => '争议通知管理员用户名',
-            'Type' => 'text',
-            'Size' => '40',
-            'Default' => '',
-            'Description' => ' localAPI 调用使用；留空使用 WHMCS 默认上下文',
-        ],
-        'disputeNotifyAdmins' => [
-            'FriendlyName' => '争议通知管理员',
-            'Type' => 'yesno',
-            'Default' => 'on',
-            'Description' => ' 勾选后收到争议通知时触发管理员通知',
-        ],
     ];
 }
 
@@ -294,6 +183,9 @@ function vmshellpay_hkd_link($params)
     $params = vmshellpay_hkd_applyInternalDefaults($params);
     if (vmshellpay_hkd_isInvoiceSettled($params)) {
         return '<div style="max-width:380px;margin:18px 0 18px auto;padding:10px 12px;border:1px solid #dcfce7;border-radius:14px;background:#f0fdf4;color:#166534;font-size:12px;line-height:1.55;text-align:center;">该账单已支付，支付区域已自动收起。</div>';
+    }
+    if (vmshellpay_hkd_shouldForceInvoiceRedirect($params)) {
+        return vmshellpay_hkd_renderInvoiceRedirect($params);
     }
     $methods = vmshellpay_hkd_getEnabledPaymentMethods($params);
     if (empty($methods)) {
@@ -921,6 +813,56 @@ function vmshellpay_hkd_isInvoiceMarkedPaid($invoiceId)
         logTransaction('VmShellPAY-HKD Invoice Status', ['exception' => $e->getMessage(), 'invoice_id' => (int) $invoiceId], 'Lookup Failed');
         return false;
     }
+}
+
+function vmshellpay_hkd_shouldForceInvoiceRedirect(array $params)
+{
+    $scriptName = strtolower((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $requestUri = strtolower((string) ($_SERVER['REQUEST_URI'] ?? ''));
+
+    if (strpos($scriptName, 'viewinvoice.php') !== false) {
+        return false;
+    }
+
+    if (strpos($scriptName, 'clientarea.php') !== false && strpos($requestUri, 'action=addfunds') !== false) {
+        return true;
+    }
+
+    if (strpos($scriptName, 'cart.php') !== false && strpos($requestUri, 'a=complete') !== false) {
+        return true;
+    }
+
+    return false;
+}
+
+function vmshellpay_hkd_renderInvoiceRedirect(array $params)
+{
+    $systemUrl = rtrim((string) ($params['systemurl'] ?? ''), '/');
+    $invoiceId = (int) ($params['invoiceid'] ?? 0);
+    $invoiceUrl = $systemUrl . '/viewinvoice.php?id=' . $invoiceId . '&payopen=vmshellpay';
+    $safeInvoiceUrl = htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8');
+    $jsInvoiceUrl = json_encode($invoiceUrl);
+
+    return <<<HTML
+<div style="max-width:380px;margin:18px 0 18px auto;padding:12px 14px;border:1px solid #dbeafe;border-radius:16px;background:linear-gradient(180deg,#ffffff 0%,#eff6ff 100%);color:#1e3a8a;font-size:12px;line-height:1.6;text-align:center;box-shadow:0 10px 24px rgba(59,130,246,.08);">
+  正在返回账单页并加载支付二维码...
+</div>
+<script>
+(function(){
+  var target = {$jsInvoiceUrl};
+  if (!target) return;
+  window.setTimeout(function(){
+    window.location.replace(target);
+  }, 120);
+})();
+</script>
+<noscript>
+  <meta http-equiv="refresh" content="0;url={$safeInvoiceUrl}">
+  <div style="max-width:380px;margin:10px 0 0 auto;text-align:center;font-size:12px;">
+    <a href="{$safeInvoiceUrl}" style="color:#2563eb;text-decoration:none;font-weight:600;">点击返回账单页支付</a>
+  </div>
+</noscript>
+HTML;
 }
 
 function vmshellpay_hkd_methodHint($code)

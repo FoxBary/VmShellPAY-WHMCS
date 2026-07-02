@@ -5,7 +5,7 @@ Plugin Management Guide
    - Upload the `modules` folder into the WHMCS root directory.
    - Activate `VmShellPAY-HKD` in:
      System Settings -> Payments -> Payment Gateways
-   - Configure AppId, AppSecret, API URL, payment methods, currency, exchange rate, callback URLs, and strict signature verification.
+   - Configure AppId, AppSecret, payment methods, currency, exchange rate, fees, and dispute center URL.
 
 2. Main files
    - Main gateway entry:
@@ -43,25 +43,20 @@ Plugin Management Guide
    - Refund settlement submitted to VmShellPAY is always HKD.
    - The plugin stores a rate lock record for later refund, notification, and dispute handling.
 
-5. Security rule
-   - Keep AppSecret private.
-   - Use HTTPS callback URLs.
-   - Keep callback signature verification mode as `strict` in production.
-   - Use `compat` only for short-term legacy signature troubleshooting.
-
-6. Payment UX
+5. Payment UX
    - User sees payment method radios directly on the WHMCS invoice page.
    - QR code or checkout URL loads directly inside the invoice payment area.
+   - If the user starts from cart completion or add funds, the plugin redirects back to the invoice page before loading payment.
    - VmShellPAY logo is shown above the QR code when available.
 
-7. Suggested merchant workflow
+6. Suggested merchant workflow
    - Keep all required payment channels enabled.
    - Keep exchange rate mode as `api`.
    - Keep manual exchange rates as fallback.
-   - Leave notify_url and return_url blank unless custom routing is required.
+   - Configure callback URLs on the VmShellPAY platform if required.
    - Run one small real payment test before opening the gateway to all customers.
 
-8. Updating the plugin
+7. Updating the plugin
    - Back up WHMCS files and database.
    - Replace the plugin files with the latest package.
    - Keep existing WHMCS gateway settings.

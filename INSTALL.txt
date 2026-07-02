@@ -15,50 +15,29 @@ Installation Guide
 4. Activate:
    VmShellPAY-HKD
 
-5. Fill in the gateway settings:
+5. Fill in the visible gateway settings:
    - VmShell PAY AppId
    - VmShell PAY AppSecret
-   - VmShell PAY API 地址
    - 联系邮箱
    - 平台争议中心链接
-   - 支付通知 notify_url
-   - 同步跳转 return_url
-   - 退款通知 refund_notify_url
-   - 争议通知 dispute_notify_url
    - 支付方式：支付宝.中国 / 支付宝.香港 / 微信
    - 默认支付方式
    - 收款货币种类
    - 汇率来源
    - 自动汇率接口
-   - 汇率接口 API Key
-   - 汇率接口超时秒数
-   - 汇率上浮比例
    - 手工汇率表
    - 收款手续费比例
    - 退款手续费每笔
-   - 签名方式
-   - 终端类型
-   - 支付场景
-   - 订单号前缀
-   - 回调验签策略
-   - 争议工单部门 ID
-   - 争议通知管理员用户名
-   - 争议通知管理员
 
 6. Recommended values:
-   - API 地址: https://vmshell.win
-   - 签名方式: HMAC-SHA256
-   - 回调验签策略: strict
+   - 平台争议中心链接: https://vmshell.win/disputes/{dispute_id}
    - 收款货币种类: USD
    - 汇率来源: api
    - 自动汇率接口: https://api.frankfurter.dev/v2/rate/{from}/{to}
-   - 终端类型: auto
-   - 支付场景: auto
-   - 订单号前缀: WHMCS
+   - 默认支付方式: alipay_cn
+   - 手工汇率表: keep the default fallback values
 
-7. If notify_url / return_url is left blank, the plugin will use built-in default URLs automatically.
-
-8. If VmShellPAY requires callback URLs to be configured manually, use:
+7. If VmShellPAY requires callback URLs to be configured manually, use:
    - Payment notify:
      https://your-whmcs-domain/modules/gateways/callback/vmshellpay_payment_notify_url.php
    - Refund notify:
@@ -66,9 +45,13 @@ Installation Guide
    - Dispute notify:
      https://your-whmcs-domain/modules/gateways/callback/vmshellpay_dispute_notify_url.php
 
-9. Create a test invoice, choose a payment method on the invoice page, and confirm that the QR code or checkout page loads.
+8. Create a test invoice and open the WHMCS invoice page.
 
-10. Check WHMCS logs if needed:
+9. Choose a payment method on the invoice page and confirm that the QR code or checkout page loads.
+
+10. If a customer starts from cart completion or add funds, the plugin redirects them back to the invoice page before loading the payment UI.
+
+11. Check WHMCS logs if needed:
     Billing -> Gateway Log
 
-11. See README.md for the full usage guide.
+12. See README.md for the full usage guide.
