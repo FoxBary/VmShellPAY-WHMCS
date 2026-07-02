@@ -1,0 +1,96 @@
+VmShellPAY-HKD for WHMCS 8
+Configuration Example
+
+1. VmShell PAY AppId:
+   your_app_id
+
+2. VmShell PAY AppSecret:
+   your_app_secret
+
+3. VmShell PAY API 地址:
+   https://vmshell.win
+
+4. 联系邮箱:
+   support@example.com
+
+5. 平台争议中心链接:
+   https://vmshell.win/disputes/{dispute_id}
+
+6. 支付通知 notify_url:
+   Leave blank unless custom routing is required.
+   Default:
+   https://your-whmcs-domain/modules/gateways/callback/vmshellpay_payment_notify_url.php
+
+7. 同步跳转 return_url:
+   Leave blank unless custom routing is required.
+   Default:
+   https://your-whmcs-domain/modules/gateways/vmshellpay_hkd/vmshellpay_return_url.php
+
+8. 退款通知 refund_notify_url:
+   https://your-whmcs-domain/modules/gateways/callback/vmshellpay_refund_notify_url.php
+
+9. 争议通知 dispute_notify_url:
+   https://your-whmcs-domain/modules/gateways/callback/vmshellpay_dispute_notify_url.php
+
+10. 支付方式:
+   - 支付宝.中国: Yes
+   - 支付宝.香港: Yes
+   - 微信: Yes
+
+11. 默认支付方式:
+   alipay_cn
+
+12. 收款货币种类:
+   USD
+
+13. 汇率来源:
+   api
+
+14. 自动汇率接口:
+   https://api.frankfurter.dev/v2/rate/{from}/{to}
+
+15. 汇率接口 API Key:
+   Leave blank for Frankfurter.
+
+16. 汇率接口超时秒数:
+   10
+
+17. 汇率上浮比例:
+   0
+
+18. 手工汇率表:
+   USD=7.80
+   EUR=8.45
+   GBP=9.95
+   SGD=5.78
+   JPY=0.053
+
+19. 收款手续费比例:
+   2.9
+
+20. 退款手续费每笔:
+   2.00
+
+21. 签名方式:
+   HMAC-SHA256
+
+22. 终端类型:
+   auto
+
+23. 支付场景:
+   auto
+
+24. 订单号前缀:
+   WHMCS
+
+25. 回调验签策略:
+   strict
+
+26. 争议工单部门 ID:
+   1
+
+27. 争议通知管理员用户名:
+   Leave blank unless your WHMCS localAPI setup requires an admin username.
+
+28. 争议通知管理员:
+   Yes

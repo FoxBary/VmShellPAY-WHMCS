@@ -1,0 +1,69 @@
+VmShellPAY-HKD for WHMCS 8
+Plugin Management Guide
+
+1. Merchant installation
+   - Upload the `modules` folder into the WHMCS root directory.
+   - Activate `VmShellPAY-HKD` in:
+     System Settings -> Payments -> Payment Gateways
+   - Configure AppId, AppSecret, API URL, payment methods, currency, exchange rate, callback URLs, and strict signature verification.
+
+2. Main files
+   - Main gateway entry:
+     modules/gateways/vmshellpay_hkd.php
+   - Main implementation:
+     modules/gateways/vmshellpay_hkd/core/module.php
+   - Payment QR selector:
+     modules/gateways/vmshellpay_hkd/vmshellpay_checkout.php
+   - Payment status polling:
+     modules/gateways/vmshellpay_hkd/vmshellpay_status.php
+   - Payment return page:
+     modules/gateways/vmshellpay_hkd/vmshellpay_return_url.php
+   - Exchange rate test page:
+     modules/gateways/vmshellpay_hkd/vmshellpay_exchange_rate.php
+   - Payment notify:
+     modules/gateways/callback/vmshellpay_payment_notify_url.php
+   - Refund notify:
+     modules/gateways/callback/vmshellpay_refund_notify_url.php
+   - Dispute notify:
+     modules/gateways/callback/vmshellpay_dispute_notify_url.php
+
+3. Daily operation
+   - Payment records:
+     WHMCS Billing -> Gateway Log
+   - Invoice payment status:
+     WHMCS invoice pages
+   - Refunds:
+     WHMCS invoice or transaction refund action
+   - Dispute follow-up:
+     WHMCS support tickets and your VmShellPAY dispute center
+
+4. Currency rule
+   - Merchant invoices can use supported WHMCS currencies such as USD, GBP, SGD, or JPY.
+   - Payment settlement submitted to VmShellPAY is always HKD.
+   - Refund settlement submitted to VmShellPAY is always HKD.
+   - The plugin stores a rate lock record for later refund, notification, and dispute handling.
+
+5. Security rule
+   - Keep AppSecret private.
+   - Use HTTPS callback URLs.
+   - Keep callback signature verification mode as `strict` in production.
+   - Use `compat` only for short-term legacy signature troubleshooting.
+
+6. Payment UX
+   - User sees payment method radios directly on the WHMCS invoice page.
+   - QR code or checkout URL loads directly inside the invoice payment area.
+   - VmShellPAY logo is shown above the QR code when available.
+
+7. Suggested merchant workflow
+   - Keep all required payment channels enabled.
+   - Keep exchange rate mode as `api`.
+   - Keep manual exchange rates as fallback.
+   - Leave notify_url and return_url blank unless custom routing is required.
+   - Run one small real payment test before opening the gateway to all customers.
+
+8. Updating the plugin
+   - Back up WHMCS files and database.
+   - Replace the plugin files with the latest package.
+   - Keep existing WHMCS gateway settings.
+   - Save the gateway configuration once after upload.
+   - Recheck callback URLs and run a test invoice.
