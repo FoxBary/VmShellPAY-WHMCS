@@ -61,3 +61,8 @@ Configuration Example
    - Order prefix: WHMCS
    - Notify mode: compat
    - Exchange rate timeout: 10 seconds
+
+15. Mobile behavior:
+   - Mobile clients prefer alipay_cn by default.
+   - alipay_cn on mobile uses a mobile checkout/launch URL.
+   - WeChat embedded browser blocks alipay_cn launch and shows a warning.

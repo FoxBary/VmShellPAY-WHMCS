@@ -192,16 +192,22 @@ function vmshellpay_hkd_link($params)
         return vmshellpay_hkd_renderError('暂未启用任何支付方式，请联系商户管理员。');
     }
 
+    $isMobileClient = vmshellpay_hkd_isMobileClient();
+    $preferredMethod = $isMobileClient ? 'alipay_cn' : vmshellpay_hkd_resolveDefaultPaymentMethod($params, $methods);
+    if (!isset($methods[$preferredMethod])) {
+        $preferredMethod = vmshellpay_hkd_resolveDefaultPaymentMethod($params, $methods);
+    }
+
     $systemUrl = rtrim((string) ($params['systemurl'] ?? ''), '/');
     $checkoutUrl = $systemUrl . '/modules/gateways/vmshellpay_hkd/vmshellpay_checkout.php';
     $invoiceId = htmlspecialchars((string) $params['invoiceid'], ENT_QUOTES, 'UTF-8');
-    $defaultMethod = vmshellpay_hkd_resolveDefaultPaymentMethod($params, $methods);
+    $safePreferredMethod = htmlspecialchars($preferredMethod, ENT_QUOTES, 'UTF-8');
 
     $radios = '';
     foreach ($methods as $code => $label) {
         $safeCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
         $safeLabel = htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
-        $checked = $code === $defaultMethod ? 'checked' : '';
+        $checked = $code === $preferredMethod ? 'checked' : '';
         $hint = htmlspecialchars(vmshellpay_hkd_methodHint($code), ENT_QUOTES, 'UTF-8');
         $radios .= <<<HTML
 <label class="vmshellpay-hkd-option">
@@ -212,7 +218,6 @@ function vmshellpay_hkd_link($params)
       <span class="vmshellpay-hkd-option-desc">{$hint}</span>
     </span>
   </span>
-  <span class="vmshellpay-hkd-option-tag">可选</span>
 </label>
 HTML;
     }
@@ -223,6 +228,8 @@ HTML;
     $jsContainerId = json_encode($containerId);
     $jsStatusUrl = json_encode($systemUrl . '/modules/gateways/vmshellpay_hkd/vmshellpay_status.php');
     $jsInvoiceId = json_encode((string) $params['invoiceid']);
+    $jsPreferredMethod = json_encode($preferredMethod);
+    $isWechatBrowser = vmshellpay_hkd_isWechatBrowser() ? 'true' : 'false';
     return <<<HTML
 <div id="{$containerId}" class="vmshellpay-hkd-shell">
   <style>
@@ -238,7 +245,6 @@ HTML;
     #{$containerId} .vmshellpay-hkd-option-copy{display:block;min-width:0}
     #{$containerId} .vmshellpay-hkd-option-title{font-size:12px;font-weight:600;color:#0f172a;white-space:nowrap}
     #{$containerId} .vmshellpay-hkd-option-desc{display:none}
-    #{$containerId} .vmshellpay-hkd-option-tag{display:none}
     #{$containerId} [data-vmshellpay-result]{margin-top:10px;transition:opacity .22s ease,transform .22s ease}
     #{$containerId} [data-vmshellpay-result].is-hiding{opacity:0;transform:translateY(4px)}
     #{$containerId} .vmshellpay-hkd-paid-note{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;border:1px solid #d1fae5;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#f0fdf4 100%);color:#166534;font-size:12px;line-height:1.5;box-shadow:0 10px 24px rgba(34,197,94,.08)}
@@ -269,6 +275,10 @@ HTML;
   var radios = root.querySelectorAll('input[name="payment_method"]');
   var pollTimer = null;
   var redirecting = false;
+  var requestNonce = 0;
+  var pendingMethod = null;
+  var isWechatBrowser = {$isWechatBrowser};
+  var launchTimer = null;
   if (!form || !result) return;
   if (form.dataset.bound === '1') return;
   form.dataset.bound = '1';
@@ -278,10 +288,17 @@ HTML;
       pollTimer = null;
     }
   }
+  function stopLaunchTimer() {
+    if (launchTimer) {
+      clearTimeout(launchTimer);
+      launchTimer = null;
+    }
+  }
   function showPaidState(redirectUrl) {
     if (redirecting) return;
     redirecting = true;
     stopPolling();
+    stopLaunchTimer();
     result.classList.add('is-hiding');
     window.setTimeout(function(){
       result.innerHTML = '<div class="vmshellpay-hkd-paid-note"><span class="vmshellpay-hkd-paid-dot">✓</span><span>支付已确认，正在返回账单页…</span></div>';
@@ -306,7 +323,53 @@ HTML;
         .catch(function(){});
     }, 4000);
   }
+  function bindMobileLaunch(htmlRoot, orderId) {
+    if (!htmlRoot) return;
+    var launchInput = htmlRoot.querySelector('input[data-vmshellpay-launch-url]');
+    if (!launchInput || !launchInput.value) return;
+    var target = launchInput.value;
+    var returnInput = htmlRoot.querySelector('input[data-vmshellpay-return-url]');
+    var returnUrl = returnInput && returnInput.value ? returnInput.value : ('/viewinvoice.php?id=' + encodeURIComponent({$jsInvoiceId}));
+    stopLaunchTimer();
+    startPolling(orderId);
+    function pollOnceAndMaybeReturn() {
+      var statusUrl = {$jsStatusUrl};
+      if (!statusUrl || !orderId || redirecting) return;
+      fetch(statusUrl + '?invoiceid=' + encodeURIComponent({$jsInvoiceId}) + '&order_id=' + encodeURIComponent(orderId) + '&_=' + Date.now(), {
+        credentials: 'same-origin'
+      }).then(function(response){
+        return response.json();
+      }).then(function(data){
+        if (data && data.paid) {
+          showPaidState(data.redirect_url || returnUrl);
+        }
+      }).catch(function(){});
+    }
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState === 'visible') {
+        pollOnceAndMaybeReturn();
+      }
+    }, { passive: true });
+    window.addEventListener('focus', pollOnceAndMaybeReturn, { passive: true });
+    window.addEventListener('pageshow', pollOnceAndMaybeReturn, { passive: true });
+    launchTimer = window.setTimeout(function(){
+      window.location.href = target;
+    }, 60);
+    window.setTimeout(function(){
+      if (!redirecting && document.visibilityState === 'visible') {
+        window.location.href = target;
+      }
+    }, 900);
+  }
   function loadPayment(methodValue) {
+    pendingMethod = methodValue || '';
+    requestNonce += 1;
+    var currentNonce = requestNonce;
+    if (pendingMethod === 'alipay_cn' && isWechatBrowser) {
+      stopPolling();
+      result.innerHTML = '<div style="padding:12px 14px;border:1px solid #fde68a;border-radius:14px;background:#fffbeb;color:#92400e;font-size:12px;line-height:1.7;">当前处于微信内置浏览器，支付宝中国无法直接拉起。请点击右上角在系统浏览器中打开后继续支付，或切换为支付宝.香港 / 微信。</div>';
+      return;
+    }
     result.innerHTML = '<div style="padding:12px 14px;border:1px solid #dbe3f0;border-radius:14px;background:#fff;color:#334155;font-size:12px;line-height:1.6;">正在获取支付二维码，请稍候...</div>';
     var data = new FormData(form);
     if (methodValue) data.set('payment_method', methodValue);
@@ -318,12 +381,15 @@ HTML;
     }).then(function(response){
       return response.text();
     }).then(function(html){
+      if (currentNonce !== requestNonce) return;
       result.innerHTML = html;
       var paidOrderInput = result.querySelector('input[data-vmshellpay-order-id]');
       if (paidOrderInput && paidOrderInput.value) {
         startPolling(paidOrderInput.value);
+        bindMobileLaunch(result, paidOrderInput.value);
       }
     }).catch(function(){
+      if (currentNonce !== requestNonce) return;
       result.innerHTML = '<div style="padding:12px 14px;border:1px solid #fecaca;border-radius:14px;background:#fff1f2;color:#be123c;font-size:12px;line-height:1.6;">支付二维码获取失败，请稍后再试。</div>';
     });
   }
@@ -346,7 +412,7 @@ HTML;
     });
   });
   var initial = form.querySelector('input[name="payment_method"]:checked');
-  loadPayment(initial ? initial.value : '');
+  loadPayment(initial ? initial.value : {$jsPreferredMethod});
 })();
 </script>
 HTML;
@@ -355,6 +421,16 @@ HTML;
 function vmshellpay_hkd_createOrderForMethod($params, $paymentMethod)
 {
     $params = vmshellpay_hkd_applyInternalDefaults($params);
+    $isMobileClient = vmshellpay_hkd_isMobileClient();
+    $isWechatBrowser = vmshellpay_hkd_isWechatBrowser();
+    if ($paymentMethod === 'alipay_cn' && $isMobileClient && $isWechatBrowser) {
+        return ['ok' => false, 'html' => vmshellpay_hkd_renderError('当前处于微信内置浏览器，支付宝中国无法直接拉起。请在系统浏览器中打开，或切换为支付宝.香港 / 微信。')];
+    }
+    $cachedPayment = vmshellpay_hkd_findReusablePaymentSession($params, $paymentMethod);
+    if ($cachedPayment) {
+        return ['ok' => true, 'html' => vmshellpay_hkd_renderPaymentHtml($params, $paymentMethod, $cachedPayment)];
+    }
+
     $orderId = vmshellpay_hkd_buildOrderId($params);
     $invoiceCurrency = strtoupper(trim((string) ($params['currency'] ?? 'HKD')));
     $invoiceAmount = round((float) $params['amount'], 2);
@@ -376,6 +452,13 @@ function vmshellpay_hkd_createOrderForMethod($params, $paymentMethod)
             . '&order_id=' . rawurlencode((string) $orderId);
     }
 
+    $terminal = (string) $params['terminal'];
+    $paymentScene = (string) $params['paymentScene'];
+    if ($paymentMethod === 'alipay_cn' && $isMobileClient) {
+        $terminal = 'mobile';
+        $paymentScene = 'wap';
+    }
+
     $payload = [
         'app_id' => trim($params['appId']),
         'method' => $paymentMethod,
@@ -391,8 +474,8 @@ function vmshellpay_hkd_createOrderForMethod($params, $paymentMethod)
         'remark' => 'WHMCS Invoice #' . $params['invoiceid'],
         'notify_url' => $notifyUrl,
         'return_url' => $returnUrl,
-        'terminal' => $params['terminal'],
-        'payment_scene' => $params['paymentScene'],
+        'terminal' => $terminal,
+        'payment_scene' => $paymentScene,
         'direct' => '1',
         'client_ip' => vmshellpay_hkd_getClientIp(),
         'timestamp' => (string) time(),
@@ -423,14 +506,13 @@ function vmshellpay_hkd_createOrderForMethod($params, $paymentMethod)
         'rate_source' => $fx['source'],
         'payment_fee_hkd' => 0,
         'refund_fee_hkd' => vmshellpay_hkd_calculateRefundFee($params['refundFeePerTxn'] ?? 0),
-        'ext_json' => json_encode(['stage' => 'created'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        'ext_json' => json_encode(['stage' => 'created', 'payment_method' => $paymentMethod], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
     ]);
 
     $payload['sign_type'] = strtoupper($params['signType']) === 'MD5' ? 'MD5' : 'HMAC-SHA256';
     $payload['signature'] = vmshellpay_hkd_sign($payload, $params['appSecret'], $payload['sign_type']);
 
     $response = vmshellpay_hkd_request($params['apiBaseUrl'], '/api/v1/pay.php', $payload);
-
     logTransaction(
         'VmShellPAY-HKD',
         [
@@ -443,6 +525,10 @@ function vmshellpay_hkd_createOrderForMethod($params, $paymentMethod)
     );
 
     if (!$response['ok']) {
+        if (vmshellpay_hkd_isDuplicateOrderResponse($response)) {
+            $duplicateDetails = vmshellpay_hkd_extractDuplicateOrderMeta($response);
+            return ['ok' => false, 'html' => vmshellpay_hkd_renderError('支付会话已存在，请返回账单页继续完成刚才那笔支付。', $duplicateDetails)];
+        }
         $error = vmshellpay_hkd_extractApiError($response);
         return ['ok' => false, 'html' => vmshellpay_hkd_renderError('下单未成功，请检查 AppId/AppSecret、应用状态、IP 白名单、支付通道权限和支付方式配置。', $error)];
     }
@@ -455,6 +541,12 @@ function vmshellpay_hkd_createOrderForMethod($params, $paymentMethod)
         $error = vmshellpay_hkd_extractApiError($response);
         return ['ok' => false, 'html' => vmshellpay_hkd_renderError('支付通道返回失败。', $error)];
     }
+    $mobileLaunchUrl = vmshellpay_hkd_firstNonEmpty([
+        vmshellpay_hkd_arrayGet($data, 'mobile_h5_url'),
+        vmshellpay_hkd_arrayGet($data, 'pay_url'),
+        vmshellpay_hkd_arrayGet($data, 'payment_url'),
+        vmshellpay_hkd_arrayGet($data, 'checkout_url'),
+    ]);
     $checkoutUrl = vmshellpay_hkd_firstNonEmpty([
         vmshellpay_hkd_arrayGet($data, 'checkout_url'),
         vmshellpay_hkd_arrayGet($data, 'payment_url'),
@@ -473,37 +565,38 @@ function vmshellpay_hkd_createOrderForMethod($params, $paymentMethod)
         return ['ok' => false, 'html' => vmshellpay_hkd_renderError('支付接口已返回响应，但未提供可跳转链接或二维码内容。请检查支付通道返回参数。', $message)];
     }
 
-    $displayName = trim($params['displayName']) ?: 'VmShellPAY-HKD';
-    $systemUrl = rtrim((string) ($params['systemurl'] ?? ''), '/');
-    $logoUrl = htmlspecialchars($systemUrl . '/modules/gateways/vmshellpay_hkd/assets/vmshell_secure_icon.jpg', ENT_QUOTES, 'UTF-8');
-    $safeCheckoutUrl = htmlspecialchars((string) $checkoutUrl, ENT_QUOTES, 'UTF-8');
-    $safeQrCodeUrl = htmlspecialchars((string) $qrCodeUrl, ENT_QUOTES, 'UTF-8');
-    $safeQrContent = htmlspecialchars((string) $qrContent, ENT_QUOTES, 'UTF-8');
+    $sessionPayload = [
+        'order_id' => (string) $orderId,
+        'payment_method' => (string) $paymentMethod,
+        'terminal' => (string) $terminal,
+        'payment_scene' => (string) $paymentScene,
+        'payment_mode' => (string) vmshellpay_hkd_firstNonEmpty([
+            vmshellpay_hkd_arrayGet($data, 'payment_mode'),
+            $paymentMethod === 'alipay_cn' && $isMobileClient ? 'redirect' : ($qrCodeUrl || $qrContent ? 'qr' : ''),
+        ]),
+        'checkout_url' => (string) $checkoutUrl,
+        'mobile_launch_url' => (string) ($mobileLaunchUrl ?: $checkoutUrl),
+        'qr_code_url' => (string) $qrCodeUrl,
+        'qr_content' => (string) $qrContent,
+        'return_url' => (string) $returnUrl,
+        'transaction_id' => (string) vmshellpay_hkd_firstNonEmpty([
+            vmshellpay_hkd_arrayGet($data, 'transaction_id'),
+            vmshellpay_hkd_arrayGet($data, 'gateway_order_id'),
+        ]),
+        'expires_at' => (string) vmshellpay_hkd_firstNonEmpty([
+            vmshellpay_hkd_arrayGet($data, 'expires_at'),
+            date('Y-m-d H:i:s', time() + 3300),
+        ]),
+    ];
+    vmshellpay_hkd_updateRateLockByOrder($orderId, [
+        'ext_json' => json_encode([
+            'stage' => 'created',
+            'payment_method' => $paymentMethod,
+            'payment_session' => $sessionPayload,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+    ]);
 
-    $actionBlock = '';
-    if ($qrContent && !$qrCodeUrl) {
-        $safeQrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' . rawurlencode($qrContent);
-    }
-
-    $qrBlock = '';
-    if ($safeQrCodeUrl) {
-        $qrBlock = '<div style="margin-top:4px;text-align:center;">'
-            . '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin:0 auto 8px;line-height:1;">'
-            . '<img src="' . $logoUrl . '" alt="Security" style="width:16px;height:16px;border-radius:4px;object-fit:cover;display:block;">'
-            . '<span style="font-size:10px;color:#64748b;">Power By </span>'
-            . '<a href="https://vmshell.win/" target="_blank" rel="noopener" style="font-size:11px;font-weight:800;text-decoration:none;background:linear-gradient(90deg,#16a34a 0%,#0ea5e9 25%,#7c3aed 50%,#f59e0b 75%,#ef4444 100%);-webkit-background-clip:text;background-clip:text;color:transparent;">VmShellPAY</a>'
-            . '</div>'
-            . '<img src="' . $safeQrCodeUrl . '" alt="QR Code" style="max-width:236px;width:100%;border-radius:14px;border:1px solid #dbe3f0;background:#fff;padding:10px;">'
-            . '</div>';
-    }
-
-    $html = <<<HTML
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:14px;box-shadow:0 8px 22px rgba(15,23,42,.05);">
-  <input type="hidden" data-vmshellpay-order-id value="{$orderId}">
-  {$qrBlock}
-</div>
-HTML;
-    return ['ok' => true, 'html' => $html];
+    return ['ok' => true, 'html' => vmshellpay_hkd_renderPaymentHtml($params, $paymentMethod, $sessionPayload)];
 }
 
 function vmshellpay_hkd_refund($params)
@@ -722,6 +815,42 @@ function vmshellpay_hkd_getClientIp()
     return '127.0.0.1';
 }
 
+function vmshellpay_hkd_isMobileClient()
+{
+    $userAgent = strtolower((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    if ($userAgent === '') {
+        return false;
+    }
+
+    $keywords = [
+        'android',
+        'iphone',
+        'ipad',
+        'ipod',
+        'ios',
+        'mobile',
+        'harmony',
+        'micromessenger',
+        'alipayclient',
+        'windows phone',
+        'opera mini',
+    ];
+
+    foreach ($keywords as $keyword) {
+        if (strpos($userAgent, $keyword) !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function vmshellpay_hkd_isWechatBrowser()
+{
+    $userAgent = strtolower((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    return $userAgent !== '' && strpos($userAgent, 'micromessenger') !== false;
+}
+
 function vmshellpay_hkd_isPublicIp($ip)
 {
     return filter_var(
@@ -772,6 +901,118 @@ function vmshellpay_hkd_extractApiError(array $response)
     }
 
     return $parts ? implode(' | ', $parts) : '平台未返回更详细的错误信息。';
+}
+
+function vmshellpay_hkd_resolveCanonicalTransactionId(array $data, $rateLock = null)
+{
+    $locked = is_array($rateLock) ? trim((string)($rateLock['transaction_id'] ?? '')) : '';
+    if ($locked !== '') {
+        return $locked;
+    }
+
+    return (string) vmshellpay_hkd_firstNonEmpty([
+        vmshellpay_hkd_arrayGet($data, 'transaction_id'),
+        vmshellpay_hkd_arrayGet($data, 'gateway_order_id'),
+        vmshellpay_hkd_arrayGet($data, 'pay_order_id'),
+        vmshellpay_hkd_arrayGet($data, 'order_id'),
+    ]);
+}
+
+function vmshellpay_hkd_shouldSkipPaymentApply($invoiceId)
+{
+    return (int)$invoiceId > 0 && vmshellpay_hkd_isInvoiceMarkedPaid($invoiceId);
+}
+
+function vmshellpay_hkd_isDuplicateOrderResponse(array $response)
+{
+    $json = is_array($response['json'] ?? null) ? $response['json'] : [];
+    $data = isset($json['data']) && is_array($json['data']) ? $json['data'] : [];
+    $message = strtolower((string) vmshellpay_hkd_firstNonEmpty([
+        vmshellpay_hkd_arrayGet($data, 'errMsg'),
+        vmshellpay_hkd_arrayGet($json, 'msg'),
+        vmshellpay_hkd_arrayGet($json, 'message'),
+        vmshellpay_hkd_arrayGet($json, 'error'),
+        $response['body'] ?? '',
+    ]));
+    return strpos($message, 'duplicate order_id') !== false
+        || strpos($message, 'duplicate order') !== false
+        || strpos($message, 'order_id exists') !== false;
+}
+
+function vmshellpay_hkd_extractDuplicateOrderMeta(array $response)
+{
+    $json = is_array($response['json'] ?? null) ? $response['json'] : [];
+    $parts = [];
+    $code = vmshellpay_hkd_firstNonEmpty([
+        vmshellpay_hkd_arrayGet($json, 'code'),
+        isset($json['data']) && is_array($json['data']) ? vmshellpay_hkd_arrayGet($json['data'], 'code') : null,
+    ]);
+    $message = vmshellpay_hkd_firstNonEmpty([
+        isset($json['data']) && is_array($json['data']) ? vmshellpay_hkd_arrayGet($json['data'], 'errMsg') : null,
+        vmshellpay_hkd_arrayGet($json, 'msg'),
+        vmshellpay_hkd_arrayGet($json, 'message'),
+    ]);
+    if ($code !== null && $code !== '') {
+        $parts[] = '代码: ' . $code;
+    }
+    if ($message !== null && $message !== '') {
+        $parts[] = '原因: ' . $message;
+    }
+    return $parts ? implode(' | ', $parts) : '平台判定该订单已存在。';
+}
+
+function vmshellpay_hkd_renderPaymentHtml(array $params, $paymentMethod, array $paymentSession)
+{
+    $isMobileClient = vmshellpay_hkd_isMobileClient();
+    $systemUrl = rtrim((string) ($params['systemurl'] ?? ''), '/');
+    $logoUrl = htmlspecialchars($systemUrl . '/modules/gateways/vmshellpay_hkd/assets/vmshell_secure_icon.jpg', ENT_QUOTES, 'UTF-8');
+    $orderId = (string) ($paymentSession['order_id'] ?? '');
+    $checkoutUrl = (string) ($paymentSession['checkout_url'] ?? '');
+    $mobileLaunchUrl = (string) ($paymentSession['mobile_launch_url'] ?? $checkoutUrl);
+    $qrCodeUrl = (string) ($paymentSession['qr_code_url'] ?? '');
+    $qrContent = (string) ($paymentSession['qr_content'] ?? '');
+    $returnUrl = (string) ($paymentSession['return_url'] ?? '');
+    if ($qrContent !== '' && $qrCodeUrl === '') {
+        $qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' . rawurlencode($qrContent);
+    }
+
+    $safeMobileLaunchUrl = htmlspecialchars($mobileLaunchUrl, ENT_QUOTES, 'UTF-8');
+    $safeQrCodeUrl = htmlspecialchars($qrCodeUrl, ENT_QUOTES, 'UTF-8');
+    $safeReturnUrl = htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8');
+
+    if ($paymentMethod === 'alipay_cn' && $isMobileClient && $checkoutUrl) {
+        return <<<HTML
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:10px 12px;box-shadow:0 8px 22px rgba(15,23,42,.05);text-align:center;">
+  <input type="hidden" data-vmshellpay-order-id value="{$orderId}">
+  <input type="hidden" data-vmshellpay-launch-url value="{$safeMobileLaunchUrl}">
+  <input type="hidden" data-vmshellpay-return-url value="{$safeReturnUrl}">
+  <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin:0 auto;line-height:1;">
+    <img src="{$logoUrl}" alt="Security" style="width:16px;height:16px;border-radius:4px;object-fit:cover;display:block;">
+    <span style="font-size:10px;color:#64748b;">Power By </span>
+    <a href="https://vmshell.win/" target="_blank" rel="noopener" style="font-size:11px;font-weight:800;text-decoration:none;background:linear-gradient(90deg,#16a34a 0%,#0ea5e9 25%,#7c3aed 50%,#f59e0b 75%,#ef4444 100%);-webkit-background-clip:text;background-clip:text;color:transparent;">VmShellPAY</a>
+  </div>
+</div>
+HTML;
+    }
+
+    $qrBlock = '';
+    if ($safeQrCodeUrl !== '') {
+        $qrBlock = '<div style="margin-top:4px;text-align:center;">'
+            . '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin:0 auto 8px;line-height:1;">'
+            . '<img src="' . $logoUrl . '" alt="Security" style="width:16px;height:16px;border-radius:4px;object-fit:cover;display:block;">'
+            . '<span style="font-size:10px;color:#64748b;">Power By </span>'
+            . '<a href="https://vmshell.win/" target="_blank" rel="noopener" style="font-size:11px;font-weight:800;text-decoration:none;background:linear-gradient(90deg,#16a34a 0%,#0ea5e9 25%,#7c3aed 50%,#f59e0b 75%,#ef4444 100%);-webkit-background-clip:text;background-clip:text;color:transparent;">VmShellPAY</a>'
+            . '</div>'
+            . '<img src="' . $safeQrCodeUrl . '" alt="QR Code" style="max-width:236px;width:100%;border-radius:14px;border:1px solid #dbe3f0;background:#fff;padding:10px;">'
+            . '</div>';
+    }
+
+    return <<<HTML
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:14px;box-shadow:0 8px 22px rgba(15,23,42,.05);">
+  <input type="hidden" data-vmshellpay-order-id value="{$orderId}">
+  {$qrBlock}
+</div>
+HTML;
 }
 
 function vmshellpay_hkd_isGatewayAccepted(array $responseJson)
@@ -1381,6 +1622,92 @@ function vmshellpay_hkd_findRateLock($invoiceId, $transactionId = '')
     return null;
 }
 
+function vmshellpay_hkd_findReusablePaymentSession(array $params, $paymentMethod)
+{
+    $invoiceId = (int) ($params['invoiceid'] ?? 0);
+    if ($invoiceId <= 0 || $paymentMethod === '' || vmshellpay_hkd_isInvoiceMarkedPaid($invoiceId)) {
+        return null;
+    }
+
+    $rateLock = vmshellpay_hkd_findRateLock($invoiceId);
+    if (!$rateLock || empty($rateLock['ext_json'])) {
+        return null;
+    }
+
+    $ext = json_decode((string) $rateLock['ext_json'], true);
+    if (!is_array($ext)) {
+        return null;
+    }
+
+    $session = isset($ext['payment_session']) && is_array($ext['payment_session']) ? $ext['payment_session'] : null;
+    if (!$session) {
+        return null;
+    }
+
+    if (($session['payment_method'] ?? '') !== $paymentMethod) {
+        return null;
+    }
+
+    if (!vmshellpay_hkd_isReusableSessionCompatible($session, $paymentMethod)) {
+        return null;
+    }
+
+    $currentCurrency = strtoupper(trim((string) ($params['currency'] ?? 'HKD')));
+    $currentAmount = round((float) ($params['amount'] ?? 0), 2);
+    $lockedCurrency = strtoupper(trim((string) ($rateLock['original_currency'] ?? 'HKD')));
+    $lockedAmount = round((float) ($rateLock['original_amount'] ?? 0), 2);
+
+    if ($currentCurrency !== $lockedCurrency || abs($currentAmount - $lockedAmount) > 0.00001) {
+        return null;
+    }
+
+    $expiresAt = trim((string) ($session['expires_at'] ?? ''));
+    if ($expiresAt !== '') {
+        $ts = strtotime($expiresAt);
+        if ($ts !== false && $ts <= (time() + 30)) {
+            return null;
+        }
+    }
+
+    if (empty($session['order_id'])) {
+        return null;
+    }
+
+    return $session;
+}
+
+function vmshellpay_hkd_isReusableSessionCompatible(array $session, $paymentMethod)
+{
+    $isMobileClient = vmshellpay_hkd_isMobileClient();
+    $paymentMode = strtolower(trim((string) ($session['payment_mode'] ?? '')));
+    $hasQr = trim((string) ($session['qr_code_url'] ?? '')) !== '' || trim((string) ($session['qr_content'] ?? '')) !== '';
+    $hasLaunch = trim((string) ($session['mobile_launch_url'] ?? '')) !== '' || trim((string) ($session['checkout_url'] ?? '')) !== '';
+
+    if ($paymentMethod === 'alipay_cn') {
+        if ($isMobileClient) {
+            if ($paymentMode !== '' && $paymentMode !== 'redirect') {
+                return false;
+            }
+            return $hasLaunch;
+        }
+
+        if ($paymentMode !== '' && $paymentMode !== 'qr') {
+            return false;
+        }
+        return $hasQr;
+    }
+
+    if ($isMobileClient && !$hasLaunch && !$hasQr) {
+        return false;
+    }
+
+    if (!$isMobileClient && !$hasQr) {
+        return false;
+    }
+
+    return true;
+}
+
 function vmshellpay_hkd_updateRateLockByOrder($orderId, array $updates)
 {
     $capsuleClass = vmshellpay_hkd_getCapsule();
@@ -1616,10 +1943,16 @@ function vmshellpay_hkd_findExistingDisputeTicket(array $context, $adminUsername
     return '';
 }
 
-function vmshellpay_hkd_buildOrderId(array $params)
+function vmshellpay_hkd_buildOrderId(array $params, $forceUnique = false)
 {
     $prefix = preg_replace('/[^A-Za-z0-9_-]/', '', (string) $params['orderPrefix']);
-    return $prefix . '_' . $params['invoiceid'] . '_' . time();
+    $micro = str_replace('.', '', sprintf('%.4f', microtime(true)));
+    $random = substr(bin2hex(random_bytes(4)), 0, 8);
+    $base = $prefix . '_' . $params['invoiceid'] . '_' . $micro;
+    if ($forceUnique) {
+        return $base . '_' . $random;
+    }
+    return $base . '_' . substr($random, 0, 4);
 }
 
 function vmshellpay_hkd_getEnabledPaymentMethods(array $params)

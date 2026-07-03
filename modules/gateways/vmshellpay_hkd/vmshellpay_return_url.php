@@ -43,17 +43,13 @@ if ($response['ok']) {
     }
 
     if (vmshellpay_hkd_isPaidStatus($data)) {
-        $transId = vmshellpay_hkd_firstNonEmpty([
-            vmshellpay_hkd_arrayGet($data, 'transaction_id'),
-            vmshellpay_hkd_arrayGet($data, 'gateway_order_id'),
-            vmshellpay_hkd_arrayGet($data, 'order_id'),
-        ]);
+        $transId = vmshellpay_hkd_resolveCanonicalTransactionId($data, $rateLock);
         $amount = vmshellpay_hkd_firstNonEmpty([
             vmshellpay_hkd_arrayGet($data, 'amount'),
             vmshellpay_hkd_arrayGet($data, 'pay_amount'),
         ]);
 
-        if ($transId) {
+        if ($transId && !vmshellpay_hkd_shouldSkipPaymentApply($invoiceId)) {
             try {
                 checkCbTransID($transId);
                 vmshellpay_hkd_updateRateLockByOrder($orderId, [

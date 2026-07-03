@@ -41,11 +41,13 @@ Plugin Management Guide
    - Merchant invoices can use supported WHMCS currencies such as USD, GBP, SGD, or JPY.
    - Payment settlement submitted to VmShellPAY is always HKD.
    - Refund settlement submitted to VmShellPAY is always HKD.
-   - The plugin stores a rate lock record for later refund, notification, and dispute handling.
+   - The plugin stores a rate lock record for later refund, notification, dispute, and reusable payment-session handling.
 
 5. Payment UX
    - User sees payment method radios directly on the WHMCS invoice page.
    - QR code or checkout URL loads directly inside the invoice payment area.
+   - Mobile Alipay China attempts to launch the mobile checkout URL automatically.
+   - WeChat embedded browser shows a warning for Alipay China and suggests opening in the system browser or switching method.
    - If the user starts from cart completion or add funds, the plugin redirects back to the invoice page before loading payment.
    - VmShellPAY logo is shown above the QR code when available.
 
@@ -54,7 +56,7 @@ Plugin Management Guide
    - Keep exchange rate mode as `api`.
    - Keep manual exchange rates as fallback.
    - Configure callback URLs on the VmShellPAY platform if required.
-   - Run one small real payment test before opening the gateway to all customers.
+   - Run desktop QR, mobile launch, payment callback, return query, refund, and dispute tests before opening the gateway to all customers.
 
 7. Updating the plugin
    - Back up WHMCS files and database.

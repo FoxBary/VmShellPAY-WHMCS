@@ -34,11 +34,7 @@ if (!$verified && $strict) {
 
 $invoiceId = vmshellpay_hkd_extractInvoiceId($payload);
 $rateLock = vmshellpay_hkd_findRateLock($invoiceId);
-$transId = vmshellpay_hkd_firstNonEmpty([
-    vmshellpay_hkd_arrayGet($payload, 'transaction_id'),
-    vmshellpay_hkd_arrayGet($payload, 'gateway_order_id'),
-    vmshellpay_hkd_arrayGet($payload, 'order_id'),
-]);
+$transId = vmshellpay_hkd_resolveCanonicalTransactionId($payload, $rateLock);
 $amount = vmshellpay_hkd_firstNonEmpty([
     vmshellpay_hkd_arrayGet($payload, 'amount'),
     vmshellpay_hkd_arrayGet($payload, 'pay_amount'),
@@ -63,6 +59,11 @@ logTransaction(
 if (!$paymentSuccess) {
     http_response_code(200);
     exit('ignored');
+}
+
+if (vmshellpay_hkd_shouldSkipPaymentApply($invoiceId)) {
+    http_response_code(200);
+    exit('success');
 }
 
 vmshellpay_hkd_updateRateLockByOrder(vmshellpay_hkd_arrayGet($payload, 'order_id'), [

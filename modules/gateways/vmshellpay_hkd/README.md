@@ -21,4 +21,4 @@ For complete installation, configuration, callback, refund, dispute, exchange-ra
 - Keep `AppSecret` private.
 - Use HTTPS for all WHMCS and callback URLs.
 - Keep manual exchange rates configured as fallback even when automatic exchange rates are enabled.
-- Test the invoice-page QR flow, cart-completion redirect flow, payment callback, return query, refund, and dispute notification before enabling the gateway for all users.
+- Test desktop QR payment, mobile Alipay China launch, WeChat embedded-browser warning, payment callback, return query, refund, and dispute notification before enabling the gateway for all users.

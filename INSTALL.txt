@@ -47,11 +47,16 @@ Installation Guide
 
 8. Create a test invoice and open the WHMCS invoice page.
 
-9. Choose a payment method on the invoice page and confirm that the QR code or checkout page loads.
+9. Test desktop QR-code payment.
 
-10. If a customer starts from cart completion or add funds, the plugin redirects them back to the invoice page before loading the payment UI.
+10. Test mobile payment:
+    - Open the invoice page from a mobile browser.
+    - Choose Alipay China and confirm that the mobile launch/checkout flow opens.
+    - In WeChat embedded browser, confirm that the plugin shows the browser warning for Alipay China.
 
-11. Check WHMCS logs if needed:
+11. Test cart completion or add-funds flow. The plugin should redirect the customer back to the invoice page before loading payment.
+
+12. Check WHMCS logs if needed:
     Billing -> Gateway Log
 
-12. See README.md for the full usage guide.
+13. See README.md for the full usage guide.
